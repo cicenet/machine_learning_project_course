@@ -1,0 +1,124 @@
+---
+title: "Prediction Assignment of Machine Learning"
+author: "Edgar Alirio Rodridriguez"
+date: "14 de abril de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE, fig.show = "asis", fig.keep = "all", cache=TRUE)
+```
+
+#Prediction Assignment of Machine Learning
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+According to the [description](http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201) of Weight Lifting Exercise Dataset, in which "Participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions": <p>
+* Class A : Exactly according to the specification (Well execution). 
+* Class B : Throwing the elbows to the front.
+* Class C : Lifting the dumbbell only halfway. 
+* Class D : Lowering the dumbbell only halfway.
+* Class E : Throwing the hips to the front. 
+
+## Challenge
+Using data from accelerometers on the belt, forearm, arm, and dumbell of six participants, in order to predict the manner in which they did the exercise, which is classified on  "classe" variable.
+
+In this report is described:<p>
+* How it was built the prediction model. 
+* How it was used the cross validation.
+* What is the expected out of sample error 
+* Why were the choices taked. 
+* The results of applying the prediction model on testing dataset that has 20 different test cases.
+
+## Environment and variables for reproducibility
+```{r preparation}
+library(caret);library(randomForest);library(rpart)
+library(RColorBrewer);library(rattle);library(rpart.plot)
+set.seed(8888)
+```
+Next, it is described the development environment for this project:<p>
+* R version 3.4.2 (2017-09-2. Platform: x86_64-w64-mingw32/x64 (64-bit)
+* rattle_5.1.0         
+* RColorBrewer_1.1-2   
+* rpart_4.1-11         
+* randomForest_4.6-12 
+* caret_6.0-77         
+* ggplot2_2.2.1        
+* lattice_0.20-35   
+
+## Loading and Cleaning Data
+The training data for this project are available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+The test data are available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+The data for this project come from this [source](http:/groupware.les.inf.puc-rio.br/har)
+
+```{r loading_data}
+UrldataTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+UrldataTest<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+oriTraining <- read.csv(url(UrldataTrain),  na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(UrldataTest),stringsAsFactors = FALSE, na.strings=c("NA","#DIV/0!",""))
+# Eliminating columns with more than 80% of records with NA
+nroRows <-nrow(oriTraining)
+cleanTraining  <- oriTraining[,colSums(is.na(oriTraining)) < .80 * nroRows]
+# Eliminating first eight columns that do not have information of sensors
+cleanTraining  <- cleanTraining[, 8:dim(cleanTraining)[2]]
+colNamesTraining <-colnames(cleanTraining)
+testing <- testing[,colnames(testing) %in% colNamesTraining]
+
+
+
+
+#cleanTesting <- testing[,colNamesTraining]
+```
+### Partition dataset into training and testing sets for cross-validation
+In order to evaluate different methods for prediction, it is necessary to partition dataset into training and testing sets.
+
+```{r partition}   
+inTrain <- createDataPartition(cleanTraining$classe, p = 0.7, list=FALSE)
+training <- cleanTraining[inTrain,]
+crossv <- cleanTraining[-inTrain,]
+colTraining <-ncol(training)
+```
+
+## Building options predictions models
+After cleaning dataset still has more than fifty columns or variables. A first review using Principal Component Analysis shows:
+
+### Principal Components 
+```{r pca}  
+preProcPCA <- preProcess(training[,-53], method = "pca", thresh = 0.95)
+preProcPCA$numComp
+```  
+The PCA needs a `r toString(preProcPCA$numComp)` components to capture 95% of the variance.
+
+### Decision Tree
+The first prediction model is Decision Tree.
+```{r decision_tree}   
+modRpart <- rpart(classe ~ ., data=training, method="class")
+predRpart <- predict(modRpart, crossv, type = "class")
+cmRpart <- confusionMatrix(predRpart, crossv$classe)
+print(cmRpart$table)
+rpart.plot(modRpart, main="Classification Tree", extra=102, under=TRUE, faclen=0)
+print(cmRpart)
+```
+The accuracy of Decision Tree model is 73% and its Confidence Interval is (0.7221, 0.7448).The expected out-of-sample error is calculated as 1 - accuracy, then it is estimated at 0.2664 or 26.64%
+
+
+### Random Forest
+The second prediction model is Random Forest.
+```{r Random Forest} 
+modRf <- randomForest(classe ~ ., data=training,method="class")
+predRf <- predict(modRf, crossv,type = "class")
+cmRf <- confusionMatrix(predRf, crossv$classe)
+print(cmRf)
+
+```
+The accuracy of Random Forest Model is 99.64% and its Confidence Interval is (0.9946, 0.9978).The expected out-of-sample error is calculated as 1 - accuracy, then it is estimated at 0.0036 or 0.36%.
+
+### Conclusion
+Based on the highest result of  99.64%  for accuracy, the Random Forest Model is selected to predict the classification for testing data set.
+
+```{r Final_prediction} 
+predictfinal <-predict(modRf,testing,method="class" )
+print(predictfinal)
+```
+
